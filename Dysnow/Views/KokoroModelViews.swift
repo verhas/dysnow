@@ -32,17 +32,17 @@ enum ModelFolderPanel {
     }
 }
 
-private extension URL {
+extension URL {
     /// "~/.dysnow/voices/…", for showing.
     var abbreviatedPath: String { (path as NSString).abbreviatingWithTildeInPath }
 }
 
 /// Download progress, a failure, or nothing.
-private struct InstallerState: View {
-    let installer: KokoroInstaller
+struct InstallerState: View {
+    let state: KokoroInstaller.State
 
     var body: some View {
-        switch installer.state {
+        switch state {
         case .idle:
             EmptyView()
         case .downloading(let fraction):
@@ -78,7 +78,7 @@ struct ModelBanner: View {
                     .textSelection(.enabled)
             }
             Spacer()
-            InstallerState(installer: installer)
+            InstallerState(state: installer.state)
             if !installer.isBusy {
                 Button(installer.isDefaultLocation ? "Download" : "Download There") {
                     let parent = installer.directory.deletingLastPathComponent()
@@ -131,7 +131,7 @@ struct SettingsView: View {
                 }
                 if installer.state != .idle {
                     HStack {
-                        InstallerState(installer: installer)
+                        InstallerState(state: installer.state)
                     }
                 }
                 HStack {
@@ -154,10 +154,14 @@ struct SettingsView: View {
                 }
                 .disabled(installer.isBusy)
             }
+            PiperSettingsSection(installer: PiperInstaller.shared)
         }
         .formStyle(.grouped)
         .frame(width: 560)
         .fixedSize(horizontal: false, vertical: true)
-        .onAppear(perform: installer.refresh)
+        .onAppear {
+            installer.refresh()
+            PiperInstaller.shared.refresh()
+        }
     }
 }

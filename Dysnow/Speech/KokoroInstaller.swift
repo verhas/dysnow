@@ -1,4 +1,3 @@
-import CryptoKit
 import Foundation
 import Observation
 
@@ -52,10 +51,13 @@ final class KokoroInstaller {
         }
         state = .downloading(0)
         do {
-            let archive = try await download()
-            defer { try? FileManager.default.removeItem(at: archive) }
-            state = .unpacking
-            try await Task.detached { try KokoroInstaller.verifyAndUnpack(archive, into: parent) }.value
+            try await ModelDownloader.install(KokoroEngine.package, into: parent) { [weak self] fraction in
+                Task { @MainActor in
+                    if case .downloading = self?.state { self?.state = .downloading(fraction) }
+                }
+            } unpacking: {
+                state = .unpacking
+            }
             guard KokoroEngine.holdsModel(target) else {
                 state = .failed("The download did not hold the model.")
                 return
@@ -92,90 +94,5 @@ final class KokoroInstaller {
         KokoroEngine.shared.unload()
         state = .idle
         refresh()
-    }
-
-    private func download() async throws -> URL {
-        let delegate = DownloadDelegate { [weak self] fraction in
-            Task { @MainActor in
-                if case .downloading = self?.state { self?.state = .downloading(fraction) }
-            }
-        }
-        let session = URLSession(configuration: .ephemeral, delegate: delegate, delegateQueue: nil)
-        defer { session.finishTasksAndInvalidate() }
-        return try await withCheckedThrowingContinuation { continuation in
-            delegate.continuation = continuation
-            session.downloadTask(with: KokoroEngine.modelURL).resume()
-        }
-    }
-
-    /// Off the main thread: the archive is hundreds of megabytes.
-    nonisolated private static func verifyAndUnpack(_ archive: URL, into parent: URL) throws {
-        let handle = try FileHandle(forReadingFrom: archive)
-        defer { try? handle.close() }
-        var hash = SHA256()
-        while let chunk = try handle.read(upToCount: 4 << 20), !chunk.isEmpty {
-            hash.update(data: chunk)
-        }
-        let digest = hash.finalize().map { String(format: "%02x", $0) }.joined()
-        guard digest == KokoroEngine.modelSHA256 else { throw InstallError.checksum }
-
-        // The archive holds a single folder, named after the model.
-        try FileManager.default.createDirectory(at: parent, withIntermediateDirectories: true)
-        let tar = Process()
-        tar.executableURL = URL(filePath: "/usr/bin/tar")
-        tar.arguments = ["xjf", archive.path, "-C", parent.path]
-        try tar.run()
-        tar.waitUntilExit()
-        guard tar.terminationStatus == 0 else { throw InstallError.unpack }
-    }
-
-    enum InstallError: LocalizedError {
-        case checksum, unpack
-
-        var errorDescription: String? {
-            switch self {
-            case .checksum: "The download is not the expected model: it may have been damaged on the way."
-            case .unpack: "The model could not be unpacked."
-            }
-        }
-    }
-}
-
-/// Reports a download's progress, and hands over the file before URLSession
-/// deletes it.
-private final class DownloadDelegate: NSObject, URLSessionDownloadDelegate, @unchecked Sendable {
-    let progress: @Sendable (Double) -> Void
-    var continuation: CheckedContinuation<URL, Error>?
-
-    init(progress: @escaping @Sendable (Double) -> Void) {
-        self.progress = progress
-    }
-
-    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didWriteData bytesWritten: Int64,
-                    totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64) {
-        let expected = totalBytesExpectedToWrite > 0 ? totalBytesExpectedToWrite
-            : Int64(KokoroEngine.downloadMegabytes) << 20
-        progress(min(Double(totalBytesWritten) / Double(expected), 1))
-    }
-
-    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
-        let kept = FileManager.default.temporaryDirectory.appending(path: "dysnow-kokoro-\(UUID().uuidString).tar.bz2")
-        do {
-            if let status = (downloadTask.response as? HTTPURLResponse)?.statusCode, !(200..<300).contains(status) {
-                throw URLError(.badServerResponse)
-            }
-            try FileManager.default.moveItem(at: location, to: kept)
-            continuation?.resume(returning: kept)
-        } catch {
-            continuation?.resume(throwing: error)
-        }
-        continuation = nil
-    }
-
-    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
-        if let error {
-            continuation?.resume(throwing: error)
-            continuation = nil
-        }
     }
 }

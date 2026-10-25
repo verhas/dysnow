@@ -1,6 +1,7 @@
 # Dysnow 0.1.0
 
-The first build: text in, speech out, with Kokoro's natural voices.
+The first build: text in, speech out, with Kokoro's natural voices, and
+Piper's for Hungarian.
 
 - Open a text file, or type or paste text into the editor.
 - The text is read as Markdown: headings, lists, links and emphasis without
@@ -14,3 +15,5 @@ The first build: text in, speech out, with Kokoro's natural voices.
   other in a queue, with a notification when a long one is done.
 - Kokoro's voice model is downloaded once, to `~/.dysnow/voices` or another
   folder, or an existing copy is used.
+- Hungarian, with Piper's voices Anna, Berta and Imre: each downloaded on
+  its own when first chosen, about 64 MB, and managed in Settings.

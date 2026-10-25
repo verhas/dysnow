@@ -5,11 +5,16 @@ import SwiftUI
 struct ContentView: View {
     @Bindable var model: AppModel
     private let installer = KokoroInstaller.shared
+    private let piperInstaller = PiperInstaller.shared
 
     var body: some View {
         VStack(spacing: 0) {
             if model.engine is KokoroEngine && !installer.isInstalled {
                 ModelBanner(installer: installer)
+                Divider()
+            } else if model.engine is PiperEngine, let voice = model.voice.flatMap({ PiperVoice.withID($0.id) }),
+                      !piperInstaller.isInstalled(voice) {
+                PiperVoiceBanner(voice: voice, installer: piperInstaller)
                 Divider()
             }
             editor
@@ -25,6 +30,7 @@ struct ContentView: View {
         .navigationSubtitle(model.fileURL == nil ? "" : "Dysnow")
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             installer.refresh()
+            piperInstaller.refresh()
         }
         .dropDestination(for: URL.self) { urls, _ in
             guard let url = urls.first else { return false }

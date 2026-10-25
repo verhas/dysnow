@@ -96,11 +96,12 @@ final class KokoroEngine: SpeechEngine, @unchecked Sendable {
     /// precision one, which is five times faster than real time on Apple
     /// silicon where the 8-bit one barely keeps up.
     static let modelName = "kokoro-multi-lang-v1_0"
-    static let modelURL = URL(string:
-        "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/\(modelName).tar.bz2")!
-    static let modelSHA256 = "c5f7e2d2caf082bc1d20fb70334a61d99d20b484500aad32e7cf84c128ea3298"
+    static let package = ModelPackage(
+        url: URL(string: "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/\(modelName).tar.bz2")!,
+        sha256: "c5f7e2d2caf082bc1d20fb70334a61d99d20b484500aad32e7cf84c128ea3298",
+        megabytes: 350)
     /// About the size of the download, for telling the user.
-    static let downloadMegabytes = 350
+    static var downloadMegabytes: Int { package.megabytes }
 
     /// Where the model goes unless the user picks another folder.
     static var defaultDirectory: URL {

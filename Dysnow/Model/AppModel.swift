@@ -21,7 +21,7 @@ final class AppModel {
     /// The file the text was opened from.
     private(set) var fileURL: URL?
 
-    let engines: [any SpeechEngine] = [KokoroEngine.shared]
+    let engines: [any SpeechEngine] = [KokoroEngine.shared, PiperEngine.shared]
 
     // The voice is chosen in this order: the language, then the gender, then
     // the model among those having such voices, then the speaker. Each choice
@@ -155,7 +155,7 @@ final class AppModel {
     }
 
     func greet() {
-        guard let voice, engine.isAvailable else { return }
+        guard let voice, engine.isAvailable(voice) else { return }
         let text = Greeting.text(languageID: languageID, name: voice.spokenName ?? voice.name)
         play([SpokenBlock(text: text, pauseAfter: 0, range: self.text.startIndex..<self.text.startIndex)])
     }
@@ -184,7 +184,7 @@ final class AppModel {
     }
 
     var canSpeak: Bool {
-        engine.isAvailable && voice != nil
+        (voice.map(engine.isAvailable) ?? false)
             && !textToSpeak.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
@@ -225,7 +225,7 @@ final class AppModel {
     // MARK: Speaking
 
     private func request(_ blocks: [SpokenBlock]) -> SpeechRequest? {
-        guard let language, let voice, engine.isAvailable else { return nil }
+        guard let language, let voice, engine.isAvailable(voice) else { return nil }
         guard !blocks.isEmpty else {
             status = "Nothing to read: there are no words in the text."
             return nil
@@ -313,7 +313,7 @@ final class AppModel {
     private static func warning(about request: SpeechRequest, for engine: any SpeechEngine) -> String {
         let unknown = Synthesizer.unknownSpeakers(in: request, for: engine)
         guard !unknown.isEmpty else { return "" }
-        return " -- no speaker called " + unknown.map { "\u{201C}\($0)\u{201D}" }.formatted(.list(type: .or))
+        return " -- no speaker called, or not downloaded: " + unknown.map { "\u{201C}\($0)\u{201D}" }.formatted(.list(type: .or))
             + ", read as \(request.voice.name)"
     }
 

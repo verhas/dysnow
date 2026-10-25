@@ -5,6 +5,7 @@ enum Greeting {
         case "es": "Hola, soy \(name). Así es como sueno."
         case "fr": "Bonjour, je suis \(name). Voici ma voix."
         case "hi": "नमस्ते, मैं \(name) हूँ। मेरी आवाज़ ऐसी है।"
+        case "hu": "Szia, \(name) vagyok. Így szól a hangom."
         case "it": "Ciao, sono \(name). Ecco come suona la mia voce."
         case "ja": "こんにちは、\(name)です。私の声はこんな感じです。"
         case "pt": "Olá, eu sou \(name). Esta é a minha voz."

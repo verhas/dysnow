@@ -94,16 +94,15 @@ before it starts.
 
 ## Suggested order
 
-1. **Piper's Hungarian voices** through sherpa-onnx. Little work, no new
-   dependency, and Hungarian becomes a real language in Dysnow. Moods are
-   expressed in pace and pauses, as with Kokoro.
+1. **Piper's Hungarian voices** through sherpa-onnx. *Done*:
+   `Dysnow/Speech/PiperEngine.swift`. More Piper voices are a line each in
+   `PiperVoice.all`, with the archive's name and SHA-256 from the release.
 2. **A trial of mlx-audio-swift with Qwen3-TTS**, in a branch. Measure the
    speed and memory on a real Mac, and check that instructions reach the
    model. If it holds up, it is the first `MoodAwareEngine`, and the
    others in the package follow cheaply.
-3. **One cloud engine**, optional, behind an API key in Settings. This is the
-   way to get emotional Hungarian, which no local model offers yet. Which one
-   depends on how well each speaks Hungarian: to be heard, not read about.
+3. ~~One cloud engine~~: decided against, so emotional Hungarian waits for
+   a local model that has it.
 4. **Moods by example** with ZipVoice or Pocket TTS, as an experiment.
 
 ## Sources

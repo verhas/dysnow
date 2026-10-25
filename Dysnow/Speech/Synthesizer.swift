@@ -58,8 +58,14 @@ enum Synthesizer {
     static func unknownSpeakers(in request: SpeechRequest, for engine: any SpeechEngine) -> [String] {
         var seen = Set<String>()
         return request.blocks.flatMap(\.runs).compactMap(\.style.speaker).filter {
-            engine.voice(named: $0, preferring: request.language) == nil && seen.insert($0.lowercased()).inserted
+            voice(named: $0, in: request, for: engine) == nil && seen.insert($0.lowercased()).inserted
         }
+    }
+
+    /// The voice a `tts:speaker` tag names, when it is there to speak.
+    private static func voice(named name: String, in request: SpeechRequest,
+                              for engine: any SpeechEngine) -> SpeechVoice? {
+        engine.voice(named: name, preferring: request.language).flatMap { engine.isAvailable($0) ? $0 : nil }
     }
 
     private static func pieces(of request: SpeechRequest, for engine: any SpeechEngine) -> [Piece] {
@@ -68,7 +74,7 @@ enum Synthesizer {
         for block in request.blocks {
             for (runIndex, run) in block.runs.enumerated() {
                 let style = run.style
-                let voice = style.speaker.flatMap { engine.voice(named: $0, preferring: request.language) }
+                let voice = style.speaker.flatMap { Self.voice(named: $0, in: request, for: engine) }
                     ?? request.voice
                 // Told to the engine, or shown in pace and pauses.
                 let prosody = toldMoods ? SpeechMarkup.Prosody() : SpeechMarkup.prosody(for: style.mood)
