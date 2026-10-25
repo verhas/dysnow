@@ -22,6 +22,7 @@ final class AppModel {
     private(set) var fileURL: URL?
 
     let engines: [any SpeechEngine] = [KokoroEngine.shared, PiperEngine.shared]
+        + (Qwen3Engine.isSupported ? [Qwen3Engine.shared] : [])
 
     // The voice is chosen in this order: the language, then the gender, then
     // the model among those having such voices, then the speaker. Each choice
@@ -105,10 +106,11 @@ final class AppModel {
 
     // MARK: Choices
 
-    /// Every language any engine speaks.
+    /// Every language any engine speaks, by name.
     var languages: [SpeechLanguage] {
         var seen = Set<String>()
         return engines.flatMap(\.languages).filter { seen.insert($0.id).inserted }
+            .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
     }
 
     /// The genders there are voices of in the language.

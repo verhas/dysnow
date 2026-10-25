@@ -39,11 +39,11 @@ enum Synthesizer {
             try Task.checkCancellation()
             var audio = try await Task.detached(priority: .userInitiated) {
                 if let mood = next.mood, let engine = engine as? any MoodAwareEngine {
-                    return try engine.synthesize(next.text, voice: next.voice, language: request.language,
-                                                 speed: next.speed, mood: mood)
+                    return try await engine.synthesize(next.text, voice: next.voice, language: request.language,
+                                                       speed: next.speed, mood: mood)
                 }
-                return try engine.synthesize(next.text, voice: next.voice, language: request.language,
-                                             speed: next.speed)
+                return try await engine.synthesize(next.text, voice: next.voice, language: request.language,
+                                                   speed: next.speed)
             }.value
             try Task.checkCancellation()
             audio.samples += repeatElement(0, count: Int(next.pause * Double(audio.sampleRate)))

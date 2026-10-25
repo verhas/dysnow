@@ -96,7 +96,7 @@ enum SpeechMarkup {
 /// get it as `SpeechMarkup.prosody`: pace and pauses.
 protocol MoodAwareEngine: SpeechEngine {
     func synthesize(_ text: String, voice: SpeechVoice, language: SpeechLanguage, speed: Float,
-                    mood: String) throws -> SynthesizedAudio
+                    mood: String) async throws -> SynthesizedAudio
 }
 
 extension SpeechEngine {

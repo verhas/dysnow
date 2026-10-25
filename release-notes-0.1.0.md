@@ -1,7 +1,7 @@
 # Dysnow 0.1.0
 
-The first build: text in, speech out, with Kokoro's natural voices, and
-Piper's for Hungarian.
+The first build: text in, speech out, with Kokoro's natural voices,
+Piper's for Hungarian, and Qwen3-TTS, which reads in the mood it is told.
 
 - Open a text file, or type or paste text into the editor.
 - The text is read as Markdown: headings, lists, links and emphasis without
@@ -17,3 +17,6 @@ Piper's for Hungarian.
   folder, or an existing copy is used.
 - Hungarian, with Piper's voices Anna, Berta and Imre: each downloaded on
   its own when first chosen, about 64 MB, and managed in Settings.
+- Qwen3-TTS on Macs with Apple silicon: nine speakers in ten languages,
+  German, Russian and Korean among them, told the mood of `tts:mood` tags in
+  words. Its model, 1.9 or 2.9 GB, is downloaded once.

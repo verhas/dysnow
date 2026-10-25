@@ -28,7 +28,7 @@ private class RecordingEngine: SpeechEngine, @unchecked Sendable {
     }
 
     func synthesize(_ text: String, voice: SpeechVoice, language: SpeechLanguage,
-                    speed: Float) throws -> SynthesizedAudio {
+                    speed: Float) async throws -> SynthesizedAudio {
         record(Call(text: text, voice: voice.id, speed: speed))
     }
 
@@ -41,7 +41,7 @@ private class RecordingEngine: SpeechEngine, @unchecked Sendable {
 /// Is told the mood instead of having it shown in pace and pauses.
 private final class MoodRecordingEngine: RecordingEngine, MoodAwareEngine, @unchecked Sendable {
     func synthesize(_ text: String, voice: SpeechVoice, language: SpeechLanguage, speed: Float,
-                    mood: String) throws -> SynthesizedAudio {
+                    mood: String) async throws -> SynthesizedAudio {
         record(Call(text: text, voice: voice.id, speed: speed, mood: mood))
     }
 }

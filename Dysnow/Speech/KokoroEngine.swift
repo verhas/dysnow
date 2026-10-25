@@ -174,7 +174,13 @@ final class KokoroEngine: SpeechEngine, @unchecked Sendable {
     }
 
     func synthesize(_ text: String, voice: SpeechVoice, language: SpeechLanguage,
-                    speed: Float) throws -> SynthesizedAudio {
+                    speed: Float) async throws -> SynthesizedAudio {
+        try generate(text, voice: voice, language: language, speed: speed)
+    }
+
+    /// Blocks while the model works; one generation at a time.
+    private func generate(_ text: String, voice: SpeechVoice, language: SpeechLanguage,
+                          speed: Float) throws -> SynthesizedAudio {
         guard let kokoroVoice = KokoroVoice.named(voice.id) else { throw SpeechError.unknownVoice(voice.id) }
         guard let kokoroLanguage = KokoroLanguage.all.first(where: { $0.id == language.id }) else {
             throw SpeechError.failed("Kokoro does not speak \(language.name).")

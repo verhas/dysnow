@@ -155,6 +155,9 @@ struct SettingsView: View {
                 .disabled(installer.isBusy)
             }
             PiperSettingsSection(installer: PiperInstaller.shared)
+            if Qwen3Engine.isSupported {
+                Qwen3SettingsSection(installer: Qwen3Installer.shared)
+            }
         }
         .formStyle(.grouped)
         .frame(width: 560)
@@ -162,6 +165,7 @@ struct SettingsView: View {
         .onAppear {
             installer.refresh()
             PiperInstaller.shared.refresh()
+            Qwen3Installer.shared.refresh()
         }
     }
 }

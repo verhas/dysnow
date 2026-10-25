@@ -130,9 +130,11 @@ build() {
                   -destination "$DESTINATION" \
                   DEPLOYMENT_POSTPROCESSING="$postprocess" build >"$log" 2>&1; then
         # xcodebuild is extremely chatty. On success, surface only real
-        # diagnostics -- lines that start with an absolute source path.
+        # diagnostics -- lines that start with the path of one of Dysnow's own
+        # sources. MLX's C++ and Metal code alone produces hundreds of
+        # warnings nobody here can act on.
         local warnings
-        warnings=$(grep -E '^/.*: warning:' "$log" | sort -u || true)
+        warnings=$(grep -E "^$PWD/(Dysnow|DysnowTests)/.*: warning:" "$log" | sort -u || true)
         if [ -n "$warnings" ]; then
             printf '%s%s%s\n' "$YELLOW" "$warnings" "$OFF"
         fi

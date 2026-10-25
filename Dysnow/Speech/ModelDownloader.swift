@@ -31,13 +31,21 @@ enum ModelDownloader {
 
     private static func download(_ package: ModelPackage,
                                  progress: @escaping @Sendable (Double) -> Void) async throws -> URL {
-        let delegate = DownloadDelegate(expectedBytes: Int64(package.megabytes) << 20, progress: progress)
+        try await downloadFile(package.url, expectedBytes: Int64(package.megabytes) << 20, progress: progress)
+    }
+
+    /// Downloads one file to a temporary place, which the caller moves or
+    /// deletes. `progress` is told how much is done, from 0 to 1, on any
+    /// thread; `expectedBytes` is used when the server does not say.
+    static func downloadFile(_ url: URL, expectedBytes: Int64,
+                             progress: @escaping @Sendable (Double) -> Void) async throws -> URL {
+        let delegate = DownloadDelegate(expectedBytes: expectedBytes, progress: progress)
         let session = URLSession(configuration: .ephemeral, delegate: delegate, delegateQueue: nil)
         defer { session.finishTasksAndInvalidate() }
         return try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { continuation in
                 delegate.continuation = continuation
-                session.downloadTask(with: package.url).resume()
+                session.downloadTask(with: url).resume()
             }
         } onCancel: {
             session.invalidateAndCancel()
@@ -95,7 +103,7 @@ private final class DownloadDelegate: NSObject, URLSessionDownloadDelegate, @unc
     }
 
     func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
-        let kept = FileManager.default.temporaryDirectory.appending(path: "dysnow-model-\(UUID().uuidString).tar.bz2")
+        let kept = FileManager.default.temporaryDirectory.appending(path: "dysnow-download-\(UUID().uuidString)")
         do {
             if let status = (downloadTask.response as? HTTPURLResponse)?.statusCode, !(200..<300).contains(status) {
                 throw URLError(.badServerResponse)

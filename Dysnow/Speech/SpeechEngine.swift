@@ -54,9 +54,9 @@ protocol SpeechEngine: AnyObject, Sendable {
     /// Whether this voice can speak: an engine whose voices are downloaded
     /// one by one says so per voice.
     func isAvailable(_ voice: SpeechVoice) -> Bool
-    /// Blocks until the speech is made: called off the main thread.
+    /// Makes the speech; called off the main thread.
     func synthesize(_ text: String, voice: SpeechVoice, language: SpeechLanguage,
-                    speed: Float) throws -> SynthesizedAudio
+                    speed: Float) async throws -> SynthesizedAudio
 }
 
 extension SpeechEngine {

@@ -21,7 +21,7 @@ final class KokoroTests: XCTestCase {
         }
     }
 
-    func testSpeaksEveryLanguage() throws {
+    func testSpeaksEveryLanguage() async throws {
         guard let directory else { throw XCTSkip("no Kokoro model here") }
         let engine = KokoroEngine(directory: directory)
         let samples: [String: String] = [
@@ -40,7 +40,7 @@ final class KokoroTests: XCTestCase {
             let voice = try XCTUnwrap(engine.voices(for: speechLanguage).first)
             let text = try XCTUnwrap(samples[language.id])
             do {
-                let audio = try engine.synthesize(text, voice: voice, language: speechLanguage, speed: 1)
+                let audio = try await engine.synthesize(text, voice: voice, language: speechLanguage, speed: 1)
                 XCTAssertEqual(audio.sampleRate, 24_000)
                 XCTAssertGreaterThan(audio.duration, 0.5, "\(language.id) with \(voice.id)")
             } catch {
@@ -49,13 +49,13 @@ final class KokoroTests: XCTestCase {
         }
     }
 
-    func testEveryVoiceGreetsInItsLanguage() throws {
+    func testEveryVoiceGreetsInItsLanguage() async throws {
         guard let directory else { throw XCTSkip("no Kokoro model here") }
         let engine = KokoroEngine(directory: directory)
         for language in engine.languages {
             for voice in engine.voices(for: language) {
                 let text = Greeting.text(languageID: language.id, name: voice.spokenName ?? voice.name)
-                let audio = try engine.synthesize(text, voice: voice, language: language, speed: 1)
+                let audio = try await engine.synthesize(text, voice: voice, language: language, speed: 1)
                 XCTAssertGreaterThan(audio.duration, 1, "\(voice.id): \(text)")
             }
         }

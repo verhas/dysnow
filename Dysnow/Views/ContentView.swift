@@ -6,6 +6,7 @@ struct ContentView: View {
     @Bindable var model: AppModel
     private let installer = KokoroInstaller.shared
     private let piperInstaller = PiperInstaller.shared
+    private let qwen3Installer = Qwen3Installer.shared
 
     var body: some View {
         VStack(spacing: 0) {
@@ -15,6 +16,9 @@ struct ContentView: View {
             } else if model.engine is PiperEngine, let voice = model.voice.flatMap({ PiperVoice.withID($0.id) }),
                       !piperInstaller.isInstalled(voice) {
                 PiperVoiceBanner(voice: voice, installer: piperInstaller)
+                Divider()
+            } else if model.engine is Qwen3Engine && !qwen3Installer.isInstalled(qwen3Installer.variant) {
+                Qwen3Banner(installer: qwen3Installer)
                 Divider()
             }
             editor
@@ -31,6 +35,7 @@ struct ContentView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             installer.refresh()
             piperInstaller.refresh()
+            qwen3Installer.refresh()
         }
         .dropDestination(for: URL.self) { urls, _ in
             guard let url = urls.first else { return false }

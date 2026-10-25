@@ -59,6 +59,9 @@ Kokoro cannot be told a mood, so Dysnow shows it in the pace and the pauses:
 Any other mood is read as written, with no change. The punctuation still
 counts: Kokoro lifts its voice a little at "!" and rises at "?".
 
-Engines that can be told the mood itself will get it as written, `excited`
-or `sad`, and the pace and pauses are left as they are: see
-[ENGINES.md](ENGINES.md).
+Qwen3-TTS can be told the mood itself. It gets it as an instruction:
+`excited` becomes "very excited and energetic", `sad` "sad and slow, with a
+heavy heart", another single word "in a … way", and a phrase is passed on
+as written. So `value="whispering"` or `value="like a sports commentator"`
+can be tried too. Its pace and pauses
+are then left as they are. See [ENGINES.md](ENGINES.md).

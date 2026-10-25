@@ -16,7 +16,7 @@ final class PiperTests: XCTestCase {
         }
     }
 
-    func testSpeaksHungarianAtTheSpeedAsked() throws {
+    func testSpeaksHungarianAtTheSpeedAsked() async throws {
         let engine = PiperEngine(directory: directory)
         let installed = PiperVoice.all.map(\.speechVoice).filter(engine.isAvailable)
         guard !installed.isEmpty else { throw XCTSkip("no Piper voice here") }
@@ -24,20 +24,24 @@ final class PiperTests: XCTestCase {
         let text = MarkdownReader.blocks(in: "# Árvíztűrő tükörfúrógép\n\nEz egy **próba**: hogy szól a magyar szöveg?")
             .map(\.text).joined(separator: " ")
         for voice in installed {
-            let normal = try engine.synthesize(text, voice: voice, language: language, speed: 1)
-            let fast = try engine.synthesize(text, voice: voice, language: language, speed: 2)
+            let normal = try await engine.synthesize(text, voice: voice, language: language, speed: 1)
+            let fast = try await engine.synthesize(text, voice: voice, language: language, speed: 2)
             XCTAssertEqual(normal.sampleRate, 22_050)
             XCTAssertGreaterThan(normal.duration, 2, voice.name)
             XCTAssertLessThan(fast.duration, normal.duration * 0.7, "\(voice.name) is not faster at speed 2")
             let greeting = Greeting.text(languageID: language.id, name: voice.name)
-            XCTAssertGreaterThan(try engine.synthesize(greeting, voice: voice, language: language, speed: 1).duration, 1)
+            let greeted = try await engine.synthesize(greeting, voice: voice, language: language, speed: 1)
+            XCTAssertGreaterThan(greeted.duration, 1)
         }
     }
 
-    func testAMissingVoiceIsNotAvailable() {
+    func testAMissingVoiceIsNotAvailable() async {
         let engine = PiperEngine(directory: FileManager.default.temporaryDirectory.appending(path: "no-voices-here"))
         XCTAssertFalse(engine.isAvailable)
-        XCTAssertThrowsError(try engine.synthesize("Szia", voice: PiperVoice.all[0].speechVoice,
-                                                   language: PiperVoice.hungarian, speed: 1))
+        do {
+            _ = try await engine.synthesize("Szia", voice: PiperVoice.all[0].speechVoice,
+                                            language: PiperVoice.hungarian, speed: 1)
+            XCTFail("a voice not downloaded spoke")
+        } catch {}
     }
 }

@@ -18,8 +18,8 @@ private final class SlowEngine: SpeechEngine {
     }
 
     func synthesize(_ text: String, voice: SpeechVoice, language: SpeechLanguage,
-                    speed: Float) throws -> SynthesizedAudio {
-        Thread.sleep(forTimeInterval: Double(delay.components.attoseconds) / 1e18)
+                    speed: Float) async throws -> SynthesizedAudio {
+        try await Task.sleep(for: delay)
         return SynthesizedAudio(samples: Array(repeating: 0.1, count: 2_400), sampleRate: 24_000)
     }
 }

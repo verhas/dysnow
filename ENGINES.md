@@ -97,13 +97,39 @@ before it starts.
 1. **Piper's Hungarian voices** through sherpa-onnx. *Done*:
    `Dysnow/Speech/PiperEngine.swift`. More Piper voices are a line each in
    `PiperVoice.all`, with the archive's name and SHA-256 from the release.
-2. **A trial of mlx-audio-swift with Qwen3-TTS**, in a branch. Measure the
-   speed and memory on a real Mac, and check that instructions reach the
-   model. If it holds up, it is the first `MoodAwareEngine`, and the
-   others in the package follow cheaply.
+2. **Qwen3-TTS through mlx-audio-swift**. *Done*:
+   `Dysnow/Speech/Qwen3Engine.swift`, the first `MoodAwareEngine`. Details
+   below. Other models in the package follow the same pattern.
 3. ~~One cloud engine~~: decided against, so emotional Hungarian waits for
    a local model that has it.
 4. **Moods by example** with ZipVoice or Pocket TTS, as an experiment.
+
+## Qwen3-TTS as built
+
+- **Package:** `mlx-audio-swift` pinned to exactly 0.1.6, with `mlx-swift`
+  from 0.32.3, both through Swift Package Manager in the Xcode project. The
+  app links `MLXAudioTTS`, `MLXAudioCore` and `MLX`.
+- **Models:** the CustomVoice models from `mlx-community`, 8-bit: 0.6B
+  (1.9 GB, the default) and 1.7B (2.9 GB), chosen in Settings. Apache 2.0.
+  Each is pinned to a commit.
+- **Download:** Dysnow fetches the files itself (`HuggingFaceDownloader`),
+  into `~/.dysnow/voices` or the folder set in Settings. The package's own
+  Hugging Face cache is not used. Every file is checked against the hash
+  Hugging Face lists for it. The files land in a `.partial` folder that is
+  renamed when complete, and a stopped download goes on where it stopped.
+- **Speakers:** Vivian, Serena, Ono Anna, Sohee, Ryan, Aiden, Uncle Fu,
+  Eric, Dylan. Each speaks all of its languages: English, German, Spanish,
+  French, Italian, Portuguese, Russian, Japanese, Korean, Chinese. Eric and
+  Dylan have a Sichuan and a Beijing accent in Chinese.
+- **Moods:** the model takes `"speaker, instruction"` as its voice.
+  `tts:mood` values become the instruction: known moods in a few words
+  ("excited" becomes "very excited and energetic"), another word as
+  "in a … way", and a phrase as it is written.
+- **Speed:** the model has no speed setting, so its speech is stretched
+  in time afterwards with Core Audio's time-pitch effect, without changing
+  the pitch (`TimeStretch`).
+- **Macs:** Apple silicon only. On an Intel Mac the engine offers no
+  languages and its Settings section is hidden.
 
 ## Sources
 

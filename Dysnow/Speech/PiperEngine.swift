@@ -123,7 +123,13 @@ final class PiperEngine: SpeechEngine, @unchecked Sendable {
     }
 
     func synthesize(_ text: String, voice: SpeechVoice, language: SpeechLanguage,
-                    speed: Float) throws -> SynthesizedAudio {
+                    speed: Float) async throws -> SynthesizedAudio {
+        try generate(text, voice: voice, language: language, speed: speed)
+    }
+
+    /// Blocks while the model works; one generation at a time.
+    private func generate(_ text: String, voice: SpeechVoice, language: SpeechLanguage,
+                          speed: Float) throws -> SynthesizedAudio {
         guard let piperVoice = PiperVoice.withID(voice.id) else { throw SpeechError.unknownVoice(voice.id) }
         lock.lock()
         defer { lock.unlock() }
