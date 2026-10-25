@@ -54,8 +54,10 @@ final class Qwen3Tests: XCTestCase {
             XCTAssertEqual(audio.sampleRate, 24_000)
             XCTAssertGreaterThan(audio.duration, 1)
         }
-        // Generated anew each time, so only roughly two thirds as long.
-        XCTAssertLessThan(fast.duration, neutral.duration * 0.85)
+        // Each generation is sampled anew and differs in length, so the speed
+        // is checked on the same speech: stretched as the engine stretches it.
+        XCTAssertEqual(try TimeStretch.apply(neutral, rate: 1.5).duration, neutral.duration / 1.5, accuracy: 0.1)
+        XCTAssertGreaterThan(fast.duration, 1)
 
         if let samples = environment["DYSNOW_SAMPLES"] {
             let folder = URL(filePath: samples)
@@ -90,5 +92,42 @@ final class Qwen3InstructionTests: XCTestCase {
         XCTAssertEqual(Qwen3Engine.instruction(for: "excited"), "very excited and energetic")
         XCTAssertEqual(Qwen3Engine.instruction(for: "whispering"), "in a whispering way")
         XCTAssertEqual(Qwen3Engine.instruction(for: "like a sports commentator"), "like a sports commentator")
+    }
+}
+
+/// Reads a long English text with a Chinese speaker, piece by piece, and
+/// keeps each piece in DYSNOW_SAMPLES, named with DYSNOW_SAMPLE_PREFIX: to be
+/// checked by ear, or by a speech recogniser, for drifting into Chinese.
+final class Qwen3DriftTests: XCTestCase {
+    func testLongEnglishTextWithAChineseSpeaker() async throws {
+        let environment = ProcessInfo.processInfo.environment
+        guard let model = environment["DYSNOW_QWEN3_MODEL"], let samples = environment["DYSNOW_SAMPLES"] else {
+            throw XCTSkip("needs DYSNOW_QWEN3_MODEL and DYSNOW_SAMPLES")
+        }
+        let prefix = environment["DYSNOW_SAMPLE_PREFIX"] ?? "drift"
+        let engine = Qwen3Engine(directory: URL(filePath: model))
+        let english = try XCTUnwrap(engine.languages.first { $0.id == "en-gb" })
+        let vivian = try XCTUnwrap(engine.voices(for: english).first { $0.id == "Vivian" })
+        let source = """
+        # Chapter 2: The Biological Basis of Moral Intuition
+
+        In 1848, a twenty-five-year-old railroad construction foreman named Phineas Gage was packing explosive \
+        powder into a hole drilled in rock when the charge detonated prematurely. The blast drove an iron rod — \
+        three feet, seven inches long, an inch and a quarter in diameter — through Gage's left cheek, behind his \
+        left eye, through the front of his brain, and out through the top of his skull. He landed on his back \
+        several feet away. He was conscious. Within minutes, he was speaking. Within weeks, he was walking. \
+        Within two months, he was back at work.
+        """
+        let pieces = MarkdownReader.blocks(in: source).flatMap { TextChunker.chunks($0.text) }
+        for run in 1...3 {
+            for (index, piece) in pieces.enumerated() {
+                let started = Date.now
+                let audio = try await engine.synthesize(piece, voice: vivian, language: english, speed: 1)
+                print("drift run \(run) piece \(index): \(Date.now.timeIntervalSince(started)) s for "
+                    + "\(audio.duration) s: \(piece.prefix(40))")
+                try AudioExporter.write(audio, to: URL(filePath: samples)
+                    .appending(path: "\(prefix)-run\(run)-piece\(index).wav"))
+            }
+        }
     }
 }

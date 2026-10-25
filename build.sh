@@ -9,7 +9,12 @@ cd "$(dirname "$0")"
 
 PROJECT="Dysnow.xcodeproj"
 SCHEME="Dysnow"
+# What was asked for, before the default fills it in: `run` has a default
+# of its own.
+REQUESTED_CONFIG="${CONFIG:-}"
 CONFIG="${CONFIG:-Debug}"
+# YES to build for this Mac's architecture only, as `run` does.
+ACTIVE_ARCH_ONLY=NO
 
 # Pinning the destination avoids xcodebuild's "using the first of multiple
 # matching destinations" warning, which it emits because a Mac can build both
@@ -37,7 +42,9 @@ Usage: ./build.sh [command] [args]
 
 Everyday commands:
   build              build (Debug) -- what runs with no command at all
-  run                build, quit any running copy, and relaunch it
+  run                build Release for this Mac, quit any running copy, and
+                     relaunch it. Release, because Qwen3-TTS's MLX code is
+                     several times too slow to speak in real time unoptimised
   test               run the unit tests
   path               print the path of the built .app
   stop               quit a running instance
@@ -61,6 +68,7 @@ Release commands, in the order a release actually goes out:
 
 Environment variables:
   CONFIG             Debug or Release; build/run/clean read it, default Debug
+                     (Release for run)
   NOTARY_PROFILE     the notarytool keychain profile to submit under,
                      default Dysnow
 EOF
@@ -126,8 +134,15 @@ build() {
 
     info "Building $SCHEME ($CONFIG)..."
 
+    # Expanded guarded: macOS's bash 3.2 calls an empty array unbound
+    # under `set -u`.
+    local architectures=()
+    if [ "$ACTIVE_ARCH_ONLY" = YES ]; then
+        architectures=(ONLY_ACTIVE_ARCH=YES)
+    fi
+
     if xcodebuild -project "$PROJECT" -scheme "$SCHEME" -configuration "$CONFIG" \
-                  -destination "$DESTINATION" \
+                  -destination "$DESTINATION" ${architectures[@]+"${architectures[@]}"} \
                   DEPLOYMENT_POSTPROCESSING="$postprocess" build >"$log" 2>&1; then
         # xcodebuild is extremely chatty. On success, surface only real
         # diagnostics -- lines that start with the path of one of Dysnow's own
@@ -613,6 +628,11 @@ case "${1:-build}" in
     build)   build ;;
     release) CONFIG=Release; build ;;
     run)
+        # Optimised, or MLX's thousands of small steps per second of speech
+        # are too slow to keep up with playback; for this Mac only, so it
+        # builds in half the time. Debugging is done in Xcode.
+        CONFIG="${REQUESTED_CONFIG:-Release}"
+        ACTIVE_ARCH_ONLY=YES
         build
         stop_app
         app=$(app_path)

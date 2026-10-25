@@ -50,7 +50,10 @@ final class AppModel {
     }
 
     var voiceID: String {
-        didSet { UserDefaults.standard.set(voiceID, forKey: Keys.voice) }
+        didSet {
+            UserDefaults.standard.set(voiceID, forKey: Keys.voice)
+            prepareEngine()
+        }
     }
 
     /// 1 is the voice's own pace.
@@ -102,6 +105,14 @@ final class AppModel {
         gender = Self.fitting(gender, in: genders)
         engineID = Self.fitting(engineID, in: availableEngines.map(\.id))
         voiceID = Self.fitting(voiceID, in: voices.map(\.id))
+        prepareEngine()
+    }
+
+    /// Has the chosen engine load what it needs now, rather than when asked
+    /// to speak.
+    func prepareEngine() {
+        let engine = engine
+        Task.detached(priority: .utility) { await engine.prepare() }
     }
 
     // MARK: Choices

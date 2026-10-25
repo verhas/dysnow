@@ -68,6 +68,7 @@ final class Qwen3Installer {
                 }
                 states[variant.id] = nil
                 choose(variant)
+                await Qwen3Engine.shared.prepare()
             } catch is CancellationError {
                 states[variant.id] = nil
             } catch let error as URLError where error.code == .cancelled {

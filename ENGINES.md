@@ -128,6 +128,21 @@ before it starts.
 - **Speed:** the model has no speed setting, so its speech is stretched
   in time afterwards with Core Audio's time-pitch effect, without changing
   the pitch (`TimeStretch`).
+- **Numbers:** digits make the model stumble or drift into another
+  language. With Vivian reading English, "In 1848" came out as gibberish or
+  Chinese in every run, and "Chapter 2" as "Chapter TOR". So numbers are
+  written out in words first (`NumberSpeller`), in the language being read,
+  with English years as years.
+- **Sampling:** Qwen's own settings: temperature 0.9 and top-k 50. The
+  package's defaults leave top-k out, which let the model wander. A
+  transcription with Whisper of three runs of a long English text, read by
+  a Chinese speaker, found no piece in another language with both fixes,
+  and a third of the number-heavy pieces garbled without them.
+- **Speed of making speech:** on an M1 Max, optimised, the 0.6B model makes
+  14 seconds of speech in about 5 seconds, so playback keeps up. Unoptimised,
+  it is slower than real time, which is why `./build.sh run` builds
+  Release. Loading the model takes about 10 seconds; it is loaded when the
+  engine is chosen, not when the first sentence is asked for.
 - **Macs:** Apple silicon only. On an Intel Mac the engine offers no
   languages and its Settings section is hidden.
 

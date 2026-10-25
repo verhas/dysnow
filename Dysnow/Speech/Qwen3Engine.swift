@@ -124,6 +124,13 @@ final class Qwen3Engine: MoodAwareEngine, @unchecked Sendable {
         }
     }
 
+    /// Loads the model, which takes seconds, so the first sentence does not
+    /// wait for it.
+    func prepare() async {
+        guard isAvailable else { return }
+        try? await runner.load(from: modelFolder)
+    }
+
     /// Lets go of the loaded model, after another was chosen or it was removed.
     func unload() async {
         await runner.unload()
@@ -165,7 +172,10 @@ final class Qwen3Engine: MoodAwareEngine, @unchecked Sendable {
         }
         let folder = modelFolder
         guard Self.holdsModel(folder) else { throw SpeechError.unavailable(name) }
-        let audio = try await runner.generate(text, prompt: prompt, language: modelLanguage, from: folder)
+        // Digits make it stumble, or drift into another language: they are
+        // read to it in words.
+        let spelled = NumberSpeller.spell(text, languageID: language.id)
+        let audio = try await runner.generate(spelled, prompt: prompt, language: modelLanguage, from: folder)
         return try TimeStretch.apply(audio, rate: speed)
     }
 
@@ -178,12 +188,15 @@ final class Qwen3Engine: MoodAwareEngine, @unchecked Sendable {
             Memory.clearCache()
         }
 
+        func load(from folder: URL) async throws {
+            guard loaded?.folder != folder else { return }
+            unload()
+            loaded = try await Loaded.load(from: folder)
+        }
+
         func generate(_ text: String, prompt: String, language: String,
                       from folder: URL) async throws -> SynthesizedAudio {
-            if loaded?.folder != folder {
-                unload()
-                loaded = try await Loaded.load(from: folder)
-            }
+            try await load(from: folder)
             guard let loaded else { throw SpeechError.unavailable("Qwen3-TTS") }
             return try await loaded.generate(text, prompt: prompt, language: language)
         }
@@ -205,9 +218,15 @@ final class Qwen3Engine: MoodAwareEngine, @unchecked Sendable {
             Loaded(folder: folder, model: try await TTS.loadModel(modelRepo: folder.path))
         }
 
+        /// Qwen's own sampling settings. The package leaves out the top-k
+        /// limit, which lets the model wander: a Chinese speaker reading
+        /// English drifted into Chinese.
+        private static let parameters = GenerateParameters(maxTokens: 4096, temperature: 0.9, topP: 1.0, topK: 50,
+                                                           repetitionPenalty: 1.05)
+
         func generate(_ text: String, prompt: String, language: String) async throws -> SynthesizedAudio {
             let samples = try await model.generate(text: text, voice: prompt, refAudio: nil, refText: nil,
-                                                   language: language)
+                                                   language: language, generationParameters: Self.parameters)
             return SynthesizedAudio(samples: samples.asArray(Float.self), sampleRate: model.sampleRate)
         }
     }

@@ -54,6 +54,9 @@ protocol SpeechEngine: AnyObject, Sendable {
     /// Whether this voice can speak: an engine whose voices are downloaded
     /// one by one says so per voice.
     func isAvailable(_ voice: SpeechVoice) -> Bool
+    /// Gets ready to speak, ahead of the first request: an engine that takes
+    /// long to load its model loads it now.
+    func prepare() async
     /// Makes the speech; called off the main thread.
     func synthesize(_ text: String, voice: SpeechVoice, language: SpeechLanguage,
                     speed: Float) async throws -> SynthesizedAudio
@@ -61,6 +64,7 @@ protocol SpeechEngine: AnyObject, Sendable {
 
 extension SpeechEngine {
     func isAvailable(_ voice: SpeechVoice) -> Bool { isAvailable }
+    func prepare() async {}
 }
 
 enum SpeechError: LocalizedError {
