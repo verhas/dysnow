@@ -4,6 +4,9 @@ Dysnow is a macOS app that reads text aloud. Open or paste a text, choose a
 language and a voice, and play it or save it as a sound file. The speech is
 made on the Mac, by models Dysnow downloads; no text is sent to the cloud.
 
+The name came first; the words to fit it came after. Dysnow stands for
+**Dy**namic **S**peech, **N**uance, **O**rchestrated for **W**ords.
+
 ## What it does
 
 - Reads Markdown or plain text: headings, lists and emphasis without their
