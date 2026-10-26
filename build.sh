@@ -113,8 +113,46 @@ fetch_vendor() {
     rm -rf "$tmp"
 }
 
+# LAME, the MP3 encoder: built from its source, for both architectures, the
+# first time, into a static library that is not in git either.
+LAME_VERSION=3.100
+LAME_SHA256=ddfe36cab873794038ae2c1210557ad34857a4b6bdc515785d1da9e175b1da1e
+LAME_LIB="Vendor/lame/lib"
+
+fetch_lame() {
+    [ -f "$LAME_LIB/.version-$LAME_VERSION" ] && return
+    info "Building LAME $LAME_VERSION..."
+    local tmp
+    tmp=$(mktemp -d -t dysnow-lame)
+    /usr/bin/curl -fsSL -o "$tmp/lame.tar.gz" \
+        "https://downloads.sourceforge.net/project/lame/lame/$LAME_VERSION/lame-$LAME_VERSION.tar.gz" \
+        || die "could not download LAME"
+    echo "$LAME_SHA256  $tmp/lame.tar.gz" | shasum -a 256 -c - >/dev/null \
+        || die "LAME download does not match its checksum"
+    tar xzf "$tmp/lame.tar.gz" -C "$tmp"
+    local arch host
+    for arch in arm64 x86_64; do
+        # LAME's configure is older than arm64's name for itself.
+        host=$([ "$arch" = arm64 ] && echo aarch64 || echo "$arch")-apple-darwin
+        cp -R "$tmp/lame-$LAME_VERSION" "$tmp/$arch"
+        (cd "$tmp/$arch" \
+            && CC="xcrun clang -arch $arch -mmacosx-version-min=26.0" ./configure --host="$host" \
+                --disable-shared --enable-static --disable-frontend --disable-decoder \
+                --disable-dependency-tracking >"$tmp/$arch.log" 2>&1 \
+            && make -j"$(sysctl -n hw.ncpu)" >>"$tmp/$arch.log" 2>&1) \
+            || { tail -20 "$tmp/$arch.log" >&2; die "could not build LAME for $arch"; }
+    done
+    rm -rf "$LAME_LIB"
+    mkdir -p "$LAME_LIB"
+    lipo -create "$tmp/arm64/libmp3lame/.libs/libmp3lame.a" "$tmp/x86_64/libmp3lame/.libs/libmp3lame.a" \
+        -output "$LAME_LIB/libmp3lame.a"
+    touch "$LAME_LIB/.version-$LAME_VERSION"
+    rm -rf "$tmp"
+}
+
 build() {
     fetch_vendor
+    fetch_lame
     local log
     log=$(mktemp -t dysnow-build)
     # Trap rather than a plain rm at the end, so an interrupted build still
@@ -180,6 +218,7 @@ stop_app() {
 # floods stderr with unrelated system logging; only the test lines are shown.
 run_tests() {
     fetch_vendor
+    fetch_lame
     local log
     log=$(mktemp -t dysnow-test)
     trap 'rm -f "$log"' RETURN

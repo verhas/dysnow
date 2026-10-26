@@ -10,6 +10,9 @@ struct HuggingFaceModel: Hashable, Sendable {
     let revision: String
     /// About the size of the download, for telling the user.
     let megabytes: Int
+    /// The files wanted, when not all of them are: XTTS v2's repository
+    /// also has what only training needs.
+    var files: Set<String>? = nil
 
     /// The folder it is downloaded to: the repository's own name.
     var folderName: String { repo.split(separator: "/").last.map(String.init) ?? repo }
@@ -40,7 +43,9 @@ enum HuggingFaceDownloader {
         let listURL = URL(string: "https://huggingface.co/api/models/\(model.repo)/tree/\(model.revision)?recursive=true")!
         let (data, response) = try await URLSession.shared.data(from: listURL)
         guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw URLError(.badServerResponse) }
-        let files = try JSONDecoder().decode([Entry].self, from: data).filter { $0.type == "file" }
+        let files = try JSONDecoder().decode([Entry].self, from: data).filter { entry in
+            entry.type == "file" && model.files.map { $0.contains(entry.path) } ?? true
+        }
         let total = max(files.reduce(0) { $0 + $1.size }, 1)
 
         let target = parent.appending(path: model.folderName, directoryHint: .isDirectory)

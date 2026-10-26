@@ -1,0 +1,7 @@
+// LAME's encoder, for Swift: `import Lame`. The static library it is in is
+// built by build.sh into ../lib.
+module Lame {
+    header "lame.h"
+    link "mp3lame"
+    export *
+}

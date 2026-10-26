@@ -118,7 +118,7 @@ final class Qwen3DriftTests: XCTestCase {
         several feet away. He was conscious. Within minutes, he was speaking. Within weeks, he was walking. \
         Within two months, he was back at work.
         """
-        let pieces = MarkdownReader.blocks(in: source).flatMap { TextChunker.chunks($0.text) }
+        let pieces = TextReader.blocks(in: source).flatMap { TextChunker.chunks($0.text) }
         for run in 1...3 {
             for (index, piece) in pieces.enumerated() {
                 let started = Date.now

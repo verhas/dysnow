@@ -101,7 +101,8 @@ final class ExportQueue {
                 audio = made
             } else {
                 // The last bit is the writing.
-                audio = try await Synthesizer.synthesize(request, with: engine) { [weak self] done, _ in
+                audio = try await Synthesizer.synthesize(request, with: engine, engines: SpeechEngines.all) {
+                    [weak self] done, _ in
                     self?.update(job.id) { $0.state = .running(done * 0.97) }
                 }
             }

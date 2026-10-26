@@ -66,11 +66,21 @@ final class KokoroTests: XCTestCase {
         let folder = FileManager.default.temporaryDirectory.appending(path: "dysnow-tests-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: folder) }
-        for name in ["speech.wav", "speech.m4a", "speech.aiff", "speech.flac"] {
+        for name in ["speech.wav", "speech.m4a", "speech.mp3", "speech.aiff", "speech.flac"] {
             let url = folder.appending(path: name)
             try AudioExporter.write(audio, to: url)
             let size = try XCTUnwrap(url.resourceValues(forKeys: [.fileSizeKey]).fileSize)
             XCTAssertGreaterThan(size, 1000, name)
+            // Read back as the second it is.
+            XCTAssertEqual(try AudioImporter.read(url).duration, 1, accuracy: 0.1, name)
         }
+    }
+
+    func testSavesMP3AtPipersRateToo() throws {
+        let audio = SynthesizedAudio(samples: (0..<44_100).map { sin(Float($0) / 10) * 0.5 }, sampleRate: 22_050)
+        let url = FileManager.default.temporaryDirectory.appending(path: "dysnow-\(UUID().uuidString).mp3")
+        defer { try? FileManager.default.removeItem(at: url) }
+        try AudioExporter.write(audio, to: url)
+        XCTAssertEqual(try AudioImporter.read(url).duration, 2, accuracy: 0.1)
     }
 }

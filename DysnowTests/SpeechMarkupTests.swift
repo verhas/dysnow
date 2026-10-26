@@ -8,12 +8,13 @@ private class RecordingEngine: SpeechEngine, @unchecked Sendable {
         let voice: String
         let speed: Float
         var mood: String?
+        var language = "en-us"
     }
 
-    let id = "recording"
-    let name = "Recording"
-    let languages = [SpeechLanguage(id: "en-us", name: "English (US)"),
-                     SpeechLanguage(id: "es", name: "Spanish")]
+    var id: String { "recording" }
+    var name: String { "Recording" }
+    var languages: [SpeechLanguage] { [SpeechLanguage(id: "en-us", name: "English (US)"),
+                                       SpeechLanguage(id: "es", name: "Spanish")] }
     let isAvailable = true
     private let lock = NSLock()
     private var recorded: [Call] = []
@@ -29,7 +30,7 @@ private class RecordingEngine: SpeechEngine, @unchecked Sendable {
 
     func synthesize(_ text: String, voice: SpeechVoice, language: SpeechLanguage,
                     speed: Float) async throws -> SynthesizedAudio {
-        record(Call(text: text, voice: voice.id, speed: speed))
+        record(Call(text: text, voice: voice.id, speed: speed, language: language.id))
     }
 
     func record(_ call: Call) -> SynthesizedAudio {
@@ -42,13 +43,31 @@ private class RecordingEngine: SpeechEngine, @unchecked Sendable {
 private final class MoodRecordingEngine: RecordingEngine, MoodAwareEngine, @unchecked Sendable {
     func synthesize(_ text: String, voice: SpeechVoice, language: SpeechLanguage, speed: Float,
                     mood: String) async throws -> SynthesizedAudio {
-        record(Call(text: text, voice: voice.id, speed: speed, mood: mood))
+        record(Call(text: text, voice: voice.id, speed: speed, mood: mood, language: language.id))
+    }
+}
+
+/// Speaks Hungarian only, at another sample rate.
+private final class HungarianEngine: RecordingEngine, @unchecked Sendable {
+    override var id: String { "other" }
+    override var name: String { "Other" }
+    override var languages: [SpeechLanguage] { [SpeechLanguage(id: "hu", name: "Hungarian")] }
+
+    override func voices(for language: SpeechLanguage) -> [SpeechVoice] {
+        language.id == "hu" ? [SpeechVoice(id: "anna", name: "Anna", gender: .female, languageID: "hu"),
+                               SpeechVoice(id: "imre", name: "Imre", gender: .male, languageID: "hu")] : []
+    }
+
+    override func synthesize(_ text: String, voice: SpeechVoice, language: SpeechLanguage,
+                             speed: Float) async throws -> SynthesizedAudio {
+        _ = record(Call(text: text, voice: voice.id, speed: speed, language: language.id))
+        return SynthesizedAudio(samples: [0.1, 0.1, 0.1, 0.1], sampleRate: 20)
     }
 }
 
 final class SpeechMarkupTests: XCTestCase {
     private func runs(_ source: String) -> [[SpokenRun]] {
-        MarkdownReader.blocks(in: source).map(\.runs)
+        TextReader.blocks(in: source).map(\.runs)
     }
 
     func testTagsAreNotReadAndCutTheText() {
@@ -97,7 +116,7 @@ final class SpeechMarkupTests: XCTestCase {
     func testFromCursorKeepsTheTagsOpenBeforeIt() {
         let source = #"<!-- tts:mood value="sad" -->One. Two.<!-- /tts:mood --> Three."#
         let cursor = source.range(of: "Two")!.lowerBound
-        XCTAssertEqual(MarkdownReader.blocks(in: source, from: cursor).map(\.runs), [[
+        XCTAssertEqual(TextReader.blocks(in: source, from: cursor).map(\.runs), [[
             SpokenRun(text: "Two.", style: SpeechStyle(mood: "sad")),
             SpokenRun(text: "Three."),
         ]])
@@ -106,14 +125,14 @@ final class SpeechMarkupTests: XCTestCase {
     func testSelectionKeepsTheTagsOpenBeforeIt() {
         let source = #"<!-- tts:speaker value="Fable" -->One. Two."#
         let range = source.range(of: "Two.")!
-        XCTAssertEqual(MarkdownReader.blocks(in: source, range: range).map(\.runs),
+        XCTAssertEqual(TextReader.blocks(in: source, range: range).map(\.runs),
                        [[SpokenRun(text: "Two.", style: SpeechStyle(speaker: "Fable"))]])
     }
 
     private func request(_ source: String, for engine: RecordingEngine, speed: Float = 1) -> SpeechRequest {
         let language = engine.languages[0]
         return SpeechRequest(engineID: engine.id, language: language, voice: engine.voices(for: language)[0],
-                             speed: speed, blocks: MarkdownReader.blocks(in: source))
+                             speed: speed, blocks: TextReader.blocks(in: source))
     }
 
     @MainActor
@@ -141,6 +160,63 @@ final class SpeechMarkupTests: XCTestCase {
         let source = #"<!-- tts:mood value="excited" -->Yes!<!-- /tts:mood -->"#
         _ = try await Synthesizer.synthesize(request(source, for: engine), with: engine)
         XCTAssertEqual(engine.calls, [.init(text: "Yes!", voice: "af_heart", speed: 1, mood: "excited")])
+    }
+
+    @MainActor
+    func testTheLanguageChangesWhereTheTextSays() async throws {
+        let engine = RecordingEngine()
+        let source = #"""
+        Hello. <!-- tts:language value="Spanish" -->Hola, <!-- tts:speaker value="Alex" -->amigos.
+        <!-- /tts:speaker --><!-- /tts:language --> Bye. <!-- tts:language value="Klingon" -->Qapla'!
+        """#
+        let request = request(source, for: engine)
+        XCTAssertEqual(Synthesizer.unknownLanguages(in: request, for: engine), ["Klingon"])
+        _ = try await Synthesizer.synthesize(request, with: engine)
+        XCTAssertEqual(engine.calls.map(\.language), ["en-us", "es", "es", "en-us", "en-us"])
+        XCTAssertEqual(engine.calls.map(\.voice), ["af_heart", "af_heart", "em_alex", "af_heart", "af_heart"])
+    }
+
+    func testSetChangesWhatItSaysUntilTheNext() {
+        let source = #"""
+        <!-- tts:set language="hu" model="Piper" speaker="" -->A <!-- tts:speed value="2" -->b<!-- /tts:speed -->
+        <!-- tts:set speed="0.5" mood="sad" -->c <!-- tts:set speed="1.5" -->d<!-- /tts:set --> e
+        """#
+        XCTAssertEqual(runs(source), [[
+            SpokenRun(text: "A", style: SpeechStyle(language: "hu", model: "Piper")),
+            SpokenRun(text: "b", style: SpeechStyle(speed: 2, language: "hu", model: "Piper")),
+            SpokenRun(text: "c", style: SpeechStyle(mood: "sad", speed: 0.5, language: "hu", model: "Piper")),
+            SpokenRun(text: "d", style: SpeechStyle(mood: "sad", speed: 1.5, language: "hu", model: "Piper")),
+            SpokenRun(text: "e", style: SpeechStyle(mood: "sad", speed: 0.5, language: "hu", model: "Piper")),
+        ]])
+    }
+
+    @MainActor
+    func testLanguagesOfAnotherModelAreReadByIt() async throws {
+        let engine = RecordingEngine(), other = HungarianEngine()
+        let source = #"""
+        Hello. <!-- tts:set language="Hungarian" -->Szia. <!-- tts:set speaker="Imre" -->Szervusz.
+        <!-- tts:set language="en-us" model="recording" speaker="Fable" -->Back.
+        """#
+        let request = request(source, for: engine)
+        XCTAssertEqual(Synthesizer.problems(in: request, for: engine, engines: [engine, other]), [])
+        let audio = try await Synthesizer.synthesize(request, with: engine, engines: [engine, other])
+        XCTAssertEqual(engine.calls.map(\.text), ["Hello.", "Back."])
+        XCTAssertEqual(engine.calls.map(\.voice), ["af_heart", "bm_fable"])
+        XCTAssertEqual(other.calls.map(\.text), ["Szia.", "Szervusz."])
+        // The chosen voice is a woman's: so is the other model's first pick.
+        XCTAssertEqual(other.calls.map(\.voice), ["anna", "imre"])
+        XCTAssertEqual(other.calls.map(\.language), ["hu", "hu"])
+        // Its speech, at 20 Hz, is joined to the rest at 10.
+        XCTAssertEqual(audio.sampleRate, 10)
+    }
+
+    @MainActor
+    func testWhatCannotBeFollowedIsReported() {
+        let engine = RecordingEngine(), other = HungarianEngine()
+        let request = request(#"<!-- tts:set model="Nope" language="Klingon" -->Hm. <!-- tts:set model="other" language="es" -->Hola."#,
+                              for: engine)
+        XCTAssertEqual(Synthesizer.problems(in: request, for: engine, engines: [engine, other]),
+                       [.model("Nope"), .language("Klingon"), .language("es")])
     }
 
     @MainActor

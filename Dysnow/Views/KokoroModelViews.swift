@@ -82,12 +82,14 @@ struct ModelBanner: View {
             if !installer.isBusy {
                 Button(installer.isDefaultLocation ? "Download" : "Download There") {
                     let parent = installer.directory.deletingLastPathComponent()
+                    guard DownloadConsent.confirm(engineID: "kokoro") else { return }
                     Task { await installer.install(into: parent) }
                 }
                 .keyboardShortcut(.defaultAction)
                 Menu("Other") {
                     Button("Download to Another Folder…") {
                         guard let folder = ModelFolderPanel.downloadDestination() else { return }
+                        guard DownloadConsent.confirm(engineID: "kokoro") else { return }
                         Task { await installer.install(into: folder) }
                     }
                     Button("Use a Model Already Downloaded…") {
@@ -108,13 +110,72 @@ struct ModelBanner: View {
     }
 }
 
-/// The Settings window: for now, where Kokoro's model is.
+/// The Settings window: where the models are, and the user's own voices.
 struct SettingsView: View {
+    @AppStorage("settings.tab") private var tab = "models"
+
+    var body: some View {
+        TabView(selection: $tab) {
+            Tab("Models", systemImage: "cpu", value: "models") {
+                ModelSettings()
+            }
+            Tab("My Voices", systemImage: "person.wave.2", value: "voices") {
+                MyVoicesSettings(store: .shared)
+                    .frame(width: 560, height: 460)
+            }
+            Tab("Editor", systemImage: "textformat", value: "editor") {
+                EditorSettingsView()
+            }
+        }
+    }
+}
+
+/// The editor's font, and the app's look.
+private struct EditorSettingsView: View {
+    @AppStorage(EditorSettings.fontKey) private var family = ""
+    @AppStorage(EditorSettings.sizeKey) private var size = EditorSettings.defaultSize
+    @AppStorage(EditorSettings.themeKey) private var theme = EditorSettings.Theme.system.rawValue
+    private let families = EditorSettings.families
+
+    var body: some View {
+        Form {
+            Section("Text") {
+                Picker("Font", selection: $family) {
+                    Text("System").tag("")
+                    Divider()
+                    ForEach(families, id: \.self) { Text($0).tag($0) }
+                }
+                LabeledContent("Size") {
+                    HStack {
+                        Slider(value: $size, in: 9...36, step: 1)
+                        Stepper("\(Int(size)) pt", value: $size, in: 9...36, step: 1)
+                            .monospacedDigit()
+                    }
+                }
+                Text("The quick brown fox jumps over the lazy dog.")
+                    .font(Font(EditorSettings.font(family: family, size: size)))
+                    .lineLimit(2)
+            }
+            Section("Appearance") {
+                Picker("Theme", selection: $theme) {
+                    ForEach(EditorSettings.Theme.allCases) { Text($0.title).tag($0.rawValue) }
+                }
+                .pickerStyle(.segmented)
+                .onChange(of: theme) { EditorSettings.applyTheme() }
+            }
+        }
+        .formStyle(.grouped)
+        .frame(width: 560, height: 360)
+    }
+}
+
+/// Where each model is, and getting it.
+private struct ModelSettings: View {
     private let installer = KokoroInstaller.shared
 
     var body: some View {
         Form {
-            Section("Kokoro voice model") {
+            Section {
                 LabeledContent("Location") {
                     Text(installer.directory.abbreviatedPath)
                         .textSelection(.enabled)
@@ -141,6 +202,7 @@ struct SettingsView: View {
                     }
                     Button("Download To…") {
                         guard let folder = ModelFolderPanel.downloadDestination() else { return }
+                        guard DownloadConsent.confirm(engineID: "kokoro") else { return }
                         Task { await installer.install(into: folder) }
                     }
                     Button("Use Default") { installer.useDefaultLocation() }
@@ -153,19 +215,26 @@ struct SettingsView: View {
                     .disabled(!installer.isInstalled)
                 }
                 .disabled(installer.isBusy)
-            }
+            } header: {
+            ModelSectionHeader(title: "Kokoro voice model", engineID: "kokoro")
+        }
             PiperSettingsSection(installer: PiperInstaller.shared)
             if Qwen3Engine.isSupported {
                 Qwen3SettingsSection(installer: Qwen3Installer.shared)
             }
+            ForEach(CloningModel.allCases, id: \.self) { model in
+                CloningSettingsSection(installer: .shared(model))
+            }
+            XTTSSettingsSection(installer: .shared)
         }
         .formStyle(.grouped)
-        .frame(width: 560)
-        .fixedSize(horizontal: false, vertical: true)
+        .frame(width: 560, height: 620)
         .onAppear {
             installer.refresh()
             PiperInstaller.shared.refresh()
             Qwen3Installer.shared.refresh()
+            CloningModel.allCases.forEach { CloningInstaller.shared($0).refresh() }
+            XTTSInstaller.shared.refresh()
         }
     }
 }

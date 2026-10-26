@@ -7,7 +7,8 @@ struct SpeechLanguage: Hashable, Sendable, Identifiable {
 }
 
 enum SpeechGender: String, CaseIterable, Sendable, Identifiable {
-    case female, male
+    /// Neutral is for voices that are neither: Piper's Sam is a non-binary one.
+    case female, male, neutral
 
     var id: String { rawValue }
 
@@ -15,6 +16,7 @@ enum SpeechGender: String, CaseIterable, Sendable, Identifiable {
         switch self {
         case .female: "Female"
         case .male: "Male"
+        case .neutral: "Neutral"
         }
     }
 }
@@ -57,6 +59,18 @@ protocol SpeechEngine: AnyObject, Sendable {
     /// Gets ready to speak, ahead of the first request: an engine that takes
     /// long to load its model loads it now.
     func prepare() async
+    /// Whether the speed asked for is followed: made faster or slower by the
+    /// model, or stretched afterwards.
+    var followsSpeed: Bool { get }
+    /// The longest piece of text, in characters, it is best given at once;
+    /// nil for a sentence or a few, as most models take them.
+    func longestPiece(in language: SpeechLanguage) -> Int?
+    /// What to tell the user while it has yet to load before it speaks;
+    /// nil when it is ready, or loads quickly.
+    func startingNote() async -> String?
+    /// The settings that change the speech it makes, so that speech made
+    /// with others is made again.
+    var speechSettings: String { get }
     /// Makes the speech; called off the main thread.
     func synthesize(_ text: String, voice: SpeechVoice, language: SpeechLanguage,
                     speed: Float) async throws -> SynthesizedAudio
@@ -64,7 +78,11 @@ protocol SpeechEngine: AnyObject, Sendable {
 
 extension SpeechEngine {
     func isAvailable(_ voice: SpeechVoice) -> Bool { isAvailable }
+    var followsSpeed: Bool { true }
+    func longestPiece(in language: SpeechLanguage) -> Int? { nil }
     func prepare() async {}
+    func startingNote() async -> String? { nil }
+    var speechSettings: String { "" }
 }
 
 enum SpeechError: LocalizedError {

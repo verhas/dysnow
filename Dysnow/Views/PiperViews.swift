@@ -20,7 +20,7 @@ enum PiperFolderPanel {
     static func existingVoices() -> URL? {
         let panel = NSOpenPanel()
         panel.message = "Choose the folder holding Piper's voices, such as "
-            + (PiperVoice.all.first?.package.folderName ?? "") + ", or one of them."
+            + (PiperModel.withID("hu_HU-anna-medium")?.package.folderName ?? "") + ", or one of them."
         panel.prompt = "Use These Voices"
         panel.canChooseFiles = false
         panel.canChooseDirectories = true
@@ -29,7 +29,7 @@ enum PiperFolderPanel {
     }
 }
 
-/// Offers to download the chosen Piper voice, which is downloaded on its own.
+/// Offers to download the chosen Piper voice's model.
 struct PiperVoiceBanner: View {
     let voice: PiperVoice
     let installer: PiperInstaller
@@ -42,7 +42,7 @@ struct PiperVoiceBanner: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text("\(voice.name)'s voice is needed to speak").bold()
                 Text("It is not in \(installer.directory.abbreviatedPath). It is downloaded once, "
-                    + "about \(voice.package.megabytes) MB.")
+                    + "about \(voice.package.megabytes) MB. Its licence: \(voice.model.licence).")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .textSelection(.enabled)
@@ -53,12 +53,16 @@ struct PiperVoiceBanner: View {
             Spacer()
             InstallerState(state: installer.state(of: voice))
             if !installer.isBusy(voice) {
-                Button("Download") { Task { await installer.install(voice) } }
-                    .keyboardShortcut(.defaultAction)
+                Button("Download") {
+                    guard DownloadConsent.confirm(voice.model) else { return }
+                    Task { await installer.install(voice.model) }
+                }
+                .keyboardShortcut(.defaultAction)
                 Menu("Other") {
                     Button("Download to Another Folder…") {
-                        guard let folder = PiperFolderPanel.downloadDestination() else { return }
-                        Task { await installer.install(voice, into: folder) }
+                        guard let folder = PiperFolderPanel.downloadDestination(),
+                              DownloadConsent.confirm(voice.model) else { return }
+                        Task { await installer.install(voice.model, into: folder) }
                     }
                     Button("Use Voices Already Downloaded…") {
                         guard let folder = PiperFolderPanel.existingVoices() else { return }
@@ -78,12 +82,18 @@ struct PiperVoiceBanner: View {
     }
 }
 
-/// Piper's part of the Settings window: the voices folder, and each voice.
+/// Piper's part of the Settings window: the voices folder, and the models
+/// of a language, to download.
 struct PiperSettingsSection: View {
     let installer: PiperInstaller
+    @AppStorage("piper.settingsLanguage") private var languageID = PiperModel.hungarian.id
+
+    private var language: SpeechLanguage {
+        PiperModel.languages.first { $0.id == languageID } ?? PiperModel.hungarian
+    }
 
     var body: some View {
-        Section("Piper voices") {
+        Section {
             LabeledContent("Location") {
                 Text(installer.directory.abbreviatedPath)
                     .textSelection(.enabled)
@@ -108,39 +118,62 @@ struct PiperSettingsSection: View {
                     .help("Use \(PiperEngine.defaultDirectory.abbreviatedPath)")
                 Spacer()
             }
-            ForEach(PiperVoice.all, id: \.id) { voice in
-                VoiceRow(voice: voice, installer: installer)
+            Picker("Language", selection: $languageID) {
+                ForEach(PiperModel.languages) { language in
+                    let count = installer.installedCount(of: language)
+                    Text(count == 0 ? language.name : "\(language.name) (\(count) downloaded)").tag(language.id)
+                }
             }
+            ForEach(PiperModel.all.filter { $0.language == language }) { model in
+                PiperModelRow(model: model, installer: installer)
+            }
+        } header: {
+            ModelSectionHeader(title: "Piper voices", engineID: "piper")
+        } footer: {
+            Text("Each voice is a download of its own, with a licence of its own, as its model card says. "
+                + "A language is offered in the main window once one of its voices is downloaded.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
         }
     }
 }
 
-private struct VoiceRow: View {
-    let voice: PiperVoice
+/// One of Piper's models: its voices, its licence, and getting it.
+private struct PiperModelRow: View {
+    let model: PiperModel
     let installer: PiperInstaller
 
     var body: some View {
         LabeledContent {
             HStack {
-                InstallerState(state: installer.state(of: voice))
-                if installer.isInstalled(voice) {
+                InstallerState(state: installer.state(of: model))
+                if installer.isInstalled(model) {
                     Label("Installed", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
                     Button("Show in Finder", systemImage: "magnifyingglass") {
-                        NSWorkspace.shared.activateFileViewerSelecting([PiperEngine.folder(of: voice)])
+                        NSWorkspace.shared.activateFileViewerSelecting([PiperEngine.folder(of: model)])
                     }
                     .labelStyle(.iconOnly)
                     .buttonStyle(.borderless)
-                    Button("Delete", systemImage: "trash") { installer.remove(voice) }
+                    Button("Delete", systemImage: "trash") { installer.remove(model) }
                         .labelStyle(.iconOnly)
                         .buttonStyle(.borderless)
-                        .help("Delete \(voice.name)'s voice from the disk")
-                } else if !installer.isBusy(voice) {
-                    Button("Download (\(voice.package.megabytes) MB)") { Task { await installer.install(voice) } }
+                        .help("Delete this voice from the disk")
+                } else if !installer.isBusy(model) {
+                    Button("Download (\(model.package.megabytes) MB)") {
+                        guard DownloadConsent.confirm(model) else { return }
+                        Task { await installer.install(model) }
+                    }
                 }
             }
         } label: {
-            Text("\(voice.name)")
-            Text("\(voice.language.name), \(voice.gender.title.lowercased())")
+            Text(model.voices.map { "\($0.name) (\($0.gender.title.lowercased()))" }.joined(separator: ", "))
+            HStack(spacing: 4) {
+                if !model.qualityTitle.isEmpty { Text(model.qualityTitle + " ·") }
+                Text(model.licence)
+                    .foregroundStyle(model.isNonCommercial ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
+                Link(model.source.lastPathComponent == "MODEL_CARD" ? "Model card" : "Source", destination: model.source)
+            }
+            .help(model.id)
         }
     }
 }

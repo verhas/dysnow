@@ -67,8 +67,11 @@ struct Qwen3Banner: View {
             Spacer()
             DownloadState(variant: variant, installer: installer)
             if !installer.isBusy(variant) {
-                Button("Download") { installer.install(variant) }
-                    .keyboardShortcut(.defaultAction)
+                Button("Download") {
+                    guard DownloadConsent.confirm(engineID: "qwen3") else { return }
+                    installer.install(variant)
+                }
+                .keyboardShortcut(.defaultAction)
                 Menu("Other") {
                     ForEach(Qwen3Variant.all.filter { $0 != variant }) { other in
                         Button("Use the \(other.title) model (\(Self.size(other)))") { installer.choose(other) }
@@ -76,6 +79,7 @@ struct Qwen3Banner: View {
                     Divider()
                     Button("Download to Another Folder…") {
                         guard let folder = Qwen3FolderPanel.downloadDestination() else { return }
+                        guard DownloadConsent.confirm(engineID: "qwen3") else { return }
                         installer.install(variant, into: folder)
                     }
                     Button("Use a Model Already Downloaded…") {
@@ -107,7 +111,7 @@ struct Qwen3SettingsSection: View {
     let installer: Qwen3Installer
 
     var body: some View {
-        Section("Qwen3-TTS models") {
+        Section {
             LabeledContent("Location") {
                 Text(installer.directory.abbreviatedPath)
                     .textSelection(.enabled)
@@ -149,7 +153,10 @@ struct Qwen3SettingsSection: View {
                                 .buttonStyle(.borderless)
                                 .help("Delete this model from the disk")
                         } else if !installer.isBusy(variant) {
-                            Button("Download (\(Qwen3Banner.size(variant)))") { installer.install(variant) }
+                            Button("Download (\(Qwen3Banner.size(variant)))") {
+                                guard DownloadConsent.confirm(engineID: "qwen3") else { return }
+                                installer.install(variant)
+                            }
                         }
                     }
                 } label: {
@@ -159,6 +166,8 @@ struct Qwen3SettingsSection: View {
             Text("Runs on the Mac's GPU. Moods in tts:mood tags are given to it as instructions.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
+        } header: {
+            ModelSectionHeader(title: "Qwen3-TTS models", engineID: "qwen3")
         }
     }
 }

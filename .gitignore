@@ -13,3 +13,6 @@ __pycache__/
 
 # sherpa-onnx static libraries, fetched by build.sh.
 /Vendor/sherpa-onnx/lib/
+
+# LAME's static library, built by build.sh.
+/Vendor/lame/lib/

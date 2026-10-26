@@ -51,7 +51,7 @@ final class ExportQueueTests: XCTestCase {
         let text = (1...sentences).map { "This is sentence number \($0) of the test text." }.joined(separator: " ")
         let language = engine.languages[0]
         return SpeechRequest(engineID: engine.id, language: language, voice: engine.voices(for: language)[0],
-                             speed: 1, blocks: MarkdownReader.blocks(in: text))
+                             speed: 1, blocks: TextReader.blocks(in: text))
     }
 
     private func waitUntilIdle(_ queue: ExportQueue) async throws {

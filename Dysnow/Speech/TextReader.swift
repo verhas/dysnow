@@ -32,39 +32,45 @@ struct SpokenBlock: Equatable, Sendable {
     var text: String { runs.map(\.text).joined(separator: " ") }
 }
 
-/// Reads text as Markdown -- which plain text is too -- into what is said:
-/// "# Title" is "Title", "**bold**" is "bold", a link is its text, code
-/// blocks are skipped, and symbols such as # or * are not spoken at all.
-/// Paragraphs, separated by empty lines, are read with a pause between them;
-/// lines of one paragraph run on as one. The `SpeechMarkup` tags in it set
-/// how each part is read.
-enum MarkdownReader {
+/// Reads text into what is said, as its format says. Markdown: "# Title" is
+/// "Title", "**bold**" is "bold", a link is its text, code blocks are
+/// skipped. Plain text is taken as it is written. In both, symbols such as #
+/// or * are not spoken at all, and paragraphs, separated by empty lines, are
+/// read with a pause between them; lines of one paragraph run on as one. The
+/// `SpeechMarkup` tags in it, written as the format writes them, set how each
+/// part is read.
+enum TextReader {
     static let paragraphPause = 0.6
     static let listItemPause = 0.3
     static let tableRowPause = 0.25
 
     /// `markup` is the tags open where the source starts.
-    static func blocks(in source: String, markup: SpeechMarkup.State = .init()) -> [SpokenBlock] {
-        var reader = Reader(source: source, markup: markup)
+    static func blocks(in source: String, format: TextFormat = .markdown,
+                       markup: SpeechMarkup.State = .init()) -> [SpokenBlock] {
+        var reader = Reader(source: source, format: format, markup: markup)
         reader.read()
         return reader.blocks
     }
 
     /// The part of the source in the range, with the tags open before it.
-    static func blocks(in source: String, range: Range<String.Index>) -> [SpokenBlock] {
-        blocks(in: String(source[range]), markup: markup(in: source, before: range.lowerBound))
+    static func blocks(in source: String, format: TextFormat = .markdown,
+                       range: Range<String.Index>) -> [SpokenBlock] {
+        blocks(in: String(source[range]), format: format,
+               markup: markup(in: source, format: format, before: range.lowerBound))
     }
 
     /// The tags open at a point of the source.
-    static func markup(in source: String, before index: String.Index) -> SpeechMarkup.State {
-        var reader = Reader(source: String(source[..<index]), markup: .init())
+    static func markup(in source: String, format: TextFormat = .markdown,
+                       before index: String.Index) -> SpeechMarkup.State {
+        var reader = Reader(source: String(source[..<index]), format: format, markup: .init())
         reader.read()
         return reader.markup
     }
 
     /// From the sentence the cursor is in to the end.
-    static func blocks(in source: String, from cursor: String.Index) -> [SpokenBlock] {
-        let all = blocks(in: source)
+    static func blocks(in source: String, format: TextFormat = .markdown,
+                       from cursor: String.Index) -> [SpokenBlock] {
+        let all = blocks(in: source, format: format)
         guard let index = all.firstIndex(where: { $0.range.upperBound >= cursor }) else { return [] }
         let block = all[index]
         let rest = Array(all[(index + 1)...])
@@ -76,7 +82,7 @@ enum MarkdownReader {
         // At the very end of the block, the sentence is the one just before.
         let probe = cursor == block.range.upperBound ? source.index(before: cursor) : cursor
         let start = max(tokenizer.tokenRange(at: probe).lowerBound, block.range.lowerBound)
-        let partial = blocks(in: source, range: start..<block.range.upperBound).map {
+        let partial = blocks(in: source, format: format, range: start..<block.range.upperBound).map {
             // Its own text, but its place in the source and the pause of the
             // block it is the end of.
             SpokenBlock(runs: $0.runs, pauseAfter: $0.pauseAfter, range: start..<block.range.upperBound)
@@ -88,14 +94,17 @@ enum MarkdownReader {
 
     /// The text of one block without its Markdown and the symbols nobody
     /// wants read out.
-    static func speakable(_ markdown: String) -> String {
-        let options = AttributedString.MarkdownParsingOptions(
-            interpretedSyntax: .inlineOnlyPreservingWhitespace, failurePolicy: .returnPartiallyParsedIfPossible)
-        var text = (try? AttributedString(markdown: markdown, options: options)).map { String($0.characters) }
-            ?? markdown
-        text = text.replacing(#/<!--.*?-->/#, with: " ")
-            .replacing(#/https?:\/\/\S+/#, with: " ")
-            .replacing(#/<\/?[A-Za-z][^>]*>/#, with: " ")
+    static func speakable(_ source: String, format: TextFormat = .markdown) -> String {
+        var text = source
+        if format == .markdown {
+            let options = AttributedString.MarkdownParsingOptions(
+                interpretedSyntax: .inlineOnlyPreservingWhitespace, failurePolicy: .returnPartiallyParsedIfPossible)
+            text = (try? AttributedString(markdown: source, options: options)).map { String($0.characters) }
+                ?? source
+            text = text.replacing(#/<!--.*?-->/#, with: " ")
+                .replacing(#/<\/?[A-Za-z][^>]*>/#, with: " ")
+        }
+        text = text.replacing(#/https?:\/\/\S+/#, with: " ")
         var kept = String.UnicodeScalarView()
         for scalar in text.unicodeScalars {
             kept.append(isSpoken(scalar) ? scalar : " ")
@@ -127,6 +136,7 @@ enum MarkdownReader {
     /// Goes through the source line by line, gathering blocks.
     private struct Reader {
         let source: String
+        let format: TextFormat
         var blocks: [SpokenBlock] = []
         /// The tags open at the point read to.
         private(set) var markup: SpeechMarkup.State
@@ -134,12 +144,13 @@ enum MarkdownReader {
         private var lines: [String] = []
         private var start: String.Index?
         private var end: String.Index?
-        private var pause = MarkdownReader.paragraphPause
+        private var pause = TextReader.paragraphPause
         /// The fence a code block was opened with, while in one.
         private var fence: String?
 
-        init(source: String, markup: SpeechMarkup.State) {
+        init(source: String, format: TextFormat, markup: SpeechMarkup.State) {
             self.source = source
+            self.format = format
             self.markup = markup
         }
 
@@ -156,6 +167,10 @@ enum MarkdownReader {
 
         private mutating func readLine(_ line: String, range: Range<String.Index>) {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if format == .plain {
+                if trimmed.isEmpty { flush() } else { gather(trimmed, range: range) }
+                return
+            }
             if let open = fence {
                 if trimmed.hasPrefix(open) { fence = nil }
                 return
@@ -173,14 +188,14 @@ enum MarkdownReader {
             }
             if let heading = trimmed.wholeMatch(of: #/#{1,6}(?:\s+(.*?))?(?:\s+#+)?\s*/#) {
                 flush()
-                add(String(heading.1 ?? ""), range: range, pause: MarkdownReader.paragraphPause)
+                add(String(heading.1 ?? ""), range: range, pause: TextReader.paragraphPause)
                 return
             }
             if trimmed.hasPrefix("|") {
                 flush()
                 let cells = trimmed.split(separator: "|").map { $0.trimmingCharacters(in: .whitespaces) }
                 add(cells.filter { !$0.isEmpty }.joined(separator: ", "), range: range,
-                    pause: MarkdownReader.tableRowPause)
+                    pause: TextReader.tableRowPause)
                 return
             }
             var content = Substring(trimmed)
@@ -192,11 +207,16 @@ enum MarkdownReader {
                 // that are not items run on in it.
                 flush()
                 content = content[item.range.upperBound...]
-                pause = MarkdownReader.listItemPause
+                pause = TextReader.listItemPause
             }
+            gather(content, range: range)
+        }
+
+        /// Adds a line to the paragraph being gathered.
+        private mutating func gather(_ line: some StringProtocol, range: Range<String.Index>) {
             if start == nil { start = range.lowerBound }
             end = range.upperBound
-            lines.append(String(content))
+            lines.append(String(line))
         }
 
         private mutating func flush() {
@@ -206,7 +226,7 @@ enum MarkdownReader {
             lines = []
             start = nil
             end = nil
-            pause = MarkdownReader.paragraphPause
+            pause = TextReader.paragraphPause
         }
 
         /// Cuts the block where a tag is, each part read as the tags open
@@ -214,9 +234,15 @@ enum MarkdownReader {
         private mutating func add(_ markdown: String, range: Range<String.Index>, pause: Double) {
             var runs: [SpokenRun] = []
             func say(_ part: Substring, as style: SpeechStyle) {
-                let text = MarkdownReader.speakable(String(part))
-                // Nothing but symbols: nothing to say.
-                guard text.contains(where: { $0.isLetter || $0.isNumber }) else { return }
+                let text = TextReader.speakable(String(part), format: format)
+                guard text.contains(where: { $0.isLetter || $0.isNumber }) else {
+                    // Punctuation after a tag, "!" in "<!-- /tts:mood -->!",
+                    // still ends what came before; other symbols say nothing.
+                    if let last = runs.last, text.contains(where: \.isPunctuation) {
+                        runs[runs.count - 1] = SpokenRun(text: last.text + text, style: last.style)
+                    }
+                    return
+                }
                 if let last = runs.last, last.style == style {
                     runs[runs.count - 1] = SpokenRun(text: last.text + " " + text, style: style)
                 } else {
@@ -224,9 +250,9 @@ enum MarkdownReader {
                 }
             }
             var rest = markdown[...]
-            for tag in markdown.matches(of: SpeechMarkup.tag) {
+            for tag in format.syntax.tags(in: markdown) {
                 say(rest[..<tag.range.lowerBound], as: markup.style)
-                markup.apply(closing: !tag.1.isEmpty, kind: String(tag.2), value: (tag.3 ?? tag.4).map(String.init))
+                markup.apply(closing: tag.closing, kind: tag.kind, attributes: tag.attributes)
                 rest = markdown[tag.range.upperBound...]
             }
             say(rest, as: markup.style)

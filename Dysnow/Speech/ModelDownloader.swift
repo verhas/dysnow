@@ -14,6 +14,15 @@ struct ModelPackage: Hashable, Sendable {
     }
 }
 
+/// A file of a model published on its own, not in an archive.
+struct ModelFile: Hashable, Sendable {
+    let url: URL
+    let sha256: String
+    let megabytes: Int
+
+    var fileName: String { url.lastPathComponent }
+}
+
 /// Downloads a model archive, checks it is the release it should be, and
 /// unpacks it.
 enum ModelDownloader {
@@ -27,6 +36,20 @@ enum ModelDownloader {
         defer { try? FileManager.default.removeItem(at: archive) }
         await unpacking()
         try await Task.detached { try verifyAndUnpack(archive, sha256: package.sha256, into: parent) }.value
+    }
+
+    /// Puts the file into `folder`, checked to be the one published.
+    static func install(_ file: ModelFile, into folder: URL,
+                        progress: @escaping @Sendable (Double) -> Void) async throws {
+        let downloaded = try await downloadFile(file.url, expectedBytes: Int64(file.megabytes) << 20,
+                                                progress: progress)
+        defer { try? FileManager.default.removeItem(at: downloaded) }
+        try await Task.detached {
+            try verify(downloaded, sha256: file.sha256)
+            let target = folder.appending(path: file.fileName)
+            try? FileManager.default.removeItem(at: target)
+            try FileManager.default.moveItem(at: downloaded, to: target)
+        }.value
     }
 
     private static func download(_ package: ModelPackage,
@@ -54,15 +77,7 @@ enum ModelDownloader {
 
     /// Off the main thread: an archive is tens or hundreds of megabytes.
     private static func verifyAndUnpack(_ archive: URL, sha256: String, into parent: URL) throws {
-        let handle = try FileHandle(forReadingFrom: archive)
-        defer { try? handle.close() }
-        var hash = SHA256()
-        while let chunk = try handle.read(upToCount: 4 << 20), !chunk.isEmpty {
-            hash.update(data: chunk)
-        }
-        let digest = hash.finalize().map { String(format: "%02x", $0) }.joined()
-        guard digest == sha256 else { throw InstallError.checksum }
-
+        try verify(archive, sha256: sha256)
         try FileManager.default.createDirectory(at: parent, withIntermediateDirectories: true)
         let tar = Process()
         tar.executableURL = URL(filePath: "/usr/bin/tar")
@@ -70,6 +85,17 @@ enum ModelDownloader {
         try tar.run()
         tar.waitUntilExit()
         guard tar.terminationStatus == 0 else { throw InstallError.unpack }
+    }
+
+    private static func verify(_ file: URL, sha256: String) throws {
+        let handle = try FileHandle(forReadingFrom: file)
+        defer { try? handle.close() }
+        var hash = SHA256()
+        while let chunk = try handle.read(upToCount: 4 << 20), !chunk.isEmpty {
+            hash.update(data: chunk)
+        }
+        let digest = hash.finalize().map { String(format: "%02x", $0) }.joined()
+        guard digest == sha256 else { throw InstallError.checksum }
     }
 
     enum InstallError: LocalizedError {
