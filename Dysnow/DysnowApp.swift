@@ -1,6 +1,6 @@
 import SwiftUI
 
-@main
+/// Started by `DysnowMain` when no command is given.
 struct DysnowApp: App {
     @State private var model = AppModel()
     @NSApplicationDelegateAdaptor private var delegate: AppDelegate

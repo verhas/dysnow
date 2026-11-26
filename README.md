@@ -39,6 +39,50 @@ downloaded; some allow non-commercial use only. Following them is up to the
 user. [ENGINES.md](ENGINES.md) describes how each model is used and what
 else was considered.
 
+## Command line and MCP
+
+The app's executable is also a command line tool, for scripts and agents.
+Link it somewhere on the `PATH` once:
+
+```
+ln -s /Applications/Dysnow.app/Contents/MacOS/Dysnow /usr/local/bin/dysnow
+```
+
+```
+dysnow speak "Good morning." -o morning.m4a
+dysnow speak -f chapter.md -l en-gb -v Fable -o chapter.mp3 --json
+echo "Szia!" | dysnow speak -l hu --play
+dysnow voices -l de          # the voices that can speak now
+dysnow models                # the models and whether they are installed
+dysnow help speak            # every option
+```
+
+The text is read as Markdown, speech tags and all, unless `--plain` is
+given. What is not asked for -- the language, the model, the speaker -- is
+as chosen in the app last. Only the result goes to the standard output: the
+path of the file written, or a line of JSON with `--json`.
+
+`dysnow mcp` serves the [Model Context Protocol](https://modelcontextprotocol.io)
+on the standard input and output, with the tools `speak`, `list_voices` and
+`list_models`. For Claude Code:
+
+```
+claude mcp add dysnow -- /Applications/Dysnow.app/Contents/MacOS/Dysnow mcp
+```
+
+Other MCP clients take the same command in their configuration:
+
+```json
+{ "mcpServers": { "dysnow": {
+    "command": "/Applications/Dysnow.app/Contents/MacOS/Dysnow", "args": ["mcp"] } } }
+```
+
+`speak` takes `text` (or `input_path`), `output_path`, and optionally
+`language`, `voice`, `model`, `gender`, `speed`, `text_format`; it returns
+when the file is written, with its length and the voice that read it.
+`return_audio` adds the sound itself to the result. The models are
+downloaded in the app; the command line and MCP only use them.
+
 ## Requirements
 
 - macOS 26 or later.

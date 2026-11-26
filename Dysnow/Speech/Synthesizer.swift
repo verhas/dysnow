@@ -149,7 +149,7 @@ enum Synthesizer {
 
     /// A model's name or id, ignoring case: "piper", "Qwen3-TTS"; or the
     /// start of it, "qwen".
-    private static func matches(_ name: String, _ engine: any SpeechEngine) -> Bool {
+    static func matches(_ name: String, _ engine: any SpeechEngine) -> Bool {
         let wanted = name.trimmingCharacters(in: .whitespaces).lowercased()
         return [engine.id.lowercased(), engine.name.lowercased()].contains { $0 == wanted || $0.hasPrefix(wanted) }
             && !wanted.isEmpty

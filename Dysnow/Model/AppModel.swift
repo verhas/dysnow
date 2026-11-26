@@ -106,7 +106,7 @@ final class AppModel {
     /// The speech made last, kept for saving it without making it again.
     private var lastAudio: (key: SpeechRequest, audio: SynthesizedAudio)?
 
-    private enum Keys {
+    enum Keys {
         static let engine = "speech.engine"
         static let language = "speech.language"
         static let gender = "speech.gender"
